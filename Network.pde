@@ -1,50 +1,58 @@
 import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryonet.*;
 import com.esotericsoftware.kryonet.EndPoint;
 
-public class Network 
+static public class Network 
 {
   static public final int port = 5115;
   
   static public void register(EndPoint endPoint)
   {
     Kryo kryo = endPoint.getKryo();
-    kryo.register(shootMsg.class);
-    kryo.register(moveMsg.class);
-    kryo.register(rotateMsg.class);
-    kryo.register(stopMsg.class);
-    kryo.register(disconnectMsg.class);
-    kryo.register(hitBulletMsg.class);
-    kryo.register(hitTankMsg.class);
-    kryo.register(hitWallMsg.class);
+    kryo.register(ShootClientMsg.class);
+    kryo.register(ShootServerMsg.class);
+    kryo.register(MoveClientMsg.class);
+    kryo.register(MoveServerMsg.class);
+    kryo.register(RotateClientMsg.class);
+    kryo.register(RotateServerMsg.class);
+    kryo.register(StopMsg.class);
+    kryo.register(DisconnectMsg.class);
+    kryo.register(HitBulletMsg.class);
+    kryo.register(HitTankMsg.class);
+    kryo.register(HitWallMsg.class);
   } 
  
-  static public class shootMsg
+  static public class ShootClientMsg
   {
     double x;
-    double y
-    double bulletRot
-    int id
-    double heading
+    double y;
+    double bulletRot;
+    int bulletID;
+    double heading;
   }
   
-  static public class hitBulletMsg
+  static public class ShootServerMsg
+  {
+  }
+  
+  static public class HitBulletMsg
   {
     int bulletID;
   }
   
-  static public class hitWallMsg
+  static public class HitWallMsg
   {
     int wallID;
     int bulletID;
   }
   
-  static public class hitTankMsg
+  static public class HitTankMsg
   {
     int player;
     int bulletID;
   }
  
-  static public class moveMsg
+  static public class MoveClientMsg
   {
     int player;
     double x;
@@ -53,17 +61,28 @@ public class Network
     double turretRot;
   }
   
-  static public class rotateMsg
+  static public class MoveServerMsg
+  {
+    float magnitude;
+    float direction;
+  }
+  
+  static public class RotateClientMsg
   {
     int player;
     double turretRot;
   }
+  
+  static public class RotateServerMsg
+  {
+    double turretRot;
+  }
  
-  static public class stopMsg
+  static public class StopMsg
   {
   }
  
-  static public class disconnectMsg
+  static public class DisconnectMsg
   {
     int player;
   } 
