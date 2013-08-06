@@ -4,7 +4,8 @@ import com.esotericsoftware.kryonet.EndPoint;
 
 static public class Network 
 {
-  static public final int port = 5115;
+  static public final int TCPPort = 5115;
+  static public final int UDPPort = 5116;
   
   static public void register(EndPoint endPoint)
   {

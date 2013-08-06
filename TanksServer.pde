@@ -5,7 +5,7 @@ import java.util.concurrent.*;
 
 Server server;
 ArrayList<Integer> players;
-HashMap<Integer, Sprite> bullets;
+ConcurrentHashMap<Integer, Sprite> bullets;
 HashMap<Sprite, Integer> bulletIDs;
 int bulletID;
 HashMap<Wall, Integer> wallIDs;
@@ -13,10 +13,8 @@ HashMap<Integer, Wall> walls;
 boolean[] connectedPlayers;
 int numPlayers;
 int playersDestroyed = 0;
-
-
 ServerTank[] tanks;
-float tankMaxSpeed = 100.0;
+float tankMaxSpeed = 125.0;
 float bulletSpeed = 300.0;
 float scaleSize; 
 float deltaTime = 0.0;
@@ -33,7 +31,7 @@ void setup()
   numPlayers = 0;
   bulletID = 0;
   players = new ArrayList<Integer>();
-  bullets = new HashMap<Integer, Sprite>();
+  bullets = new ConcurrentHashMap<Integer, Sprite>();
   bulletIDs = new HashMap<Sprite, Integer>();
   scaleSize = height / 2400.0;
   setupWalls();
@@ -44,9 +42,9 @@ void setup()
   Network.register(server);
   server.addListener(new Listener() 
   {
-    public void connection(Connection connection)
+    public void connected(Connection connection)
     {
-      setupClient(object);
+      setupClient(connection);
     }
     
     public void received(Connection connection, Object object)
@@ -55,8 +53,9 @@ void setup()
       //check which message was sent and process it
       if(object instanceof Network.ShootServerMsg)
       {
-        //Don't need shootMsg info on Server. Only needed on client
+        //print("Right before Create Bullet");
         createBullet(currPlayer);
+        //print("Right after Created Bullet");
       }
       else if(object instanceof Network.MoveServerMsg)
       {
@@ -78,7 +77,7 @@ void setup()
       }
       else if(object instanceof Network.DisconnectMsg)
       {
-        disconnectEvent(clients.get(currPlayer));
+        disconnectEvent(currPlayer);
       }
     }
     
@@ -86,7 +85,7 @@ void setup()
   });
   try
   {
-    server.bind(Network.port);
+    server.bind(Network.TCPPort, Network.UDPPort);
   }
   catch (Exception e)
   {
@@ -128,28 +127,21 @@ void setupWalls()
 void draw()
 {
   deltaTime = (float) timer.getElapsedTime();
-//  Client currClient = server.available();
-//  if(currClient != null && tanks[players.get(currClient) - 1] != null)
-//  {
-//    String currString = currClient.readStringUntil('*');
-//    if(currString != null)
-//    {
-//      processMessage(currString, currClient);
-//    }
-//  }   
-  background(255);  
+  //for debugging. Draws a background to the screen
+//  background(255);  
   processCollisions(); 
   for(int i = 0; i < 4; i++)
   {
-    if(tanks[i] != null)
-    {
-      tanks[i].draw();
-    }
+    //for debugging.  Draws tanks to screen
+//    if(tanks[i] != null)
+//    {
+//      tanks[i].draw();
+//    }
     if(tanks[i] != null && tanks[i].moving)
     {
       //if the player is moving, move them
       tanks[i].update(deltaTime);
-      if(millis() - moveTimer > 30)
+      if(millis() - moveTimer > 20)
       {
         Network.MoveClientMsg moveMsg = new Network.MoveClientMsg();
         moveMsg.player = i + 1;
@@ -157,7 +149,7 @@ void draw()
         moveMsg.y = tanks[i].tankBase.getY();
         moveMsg.baseRot = tanks[i].tankBase.getRot();
         moveMsg.turretRot = tanks[i].tankTurret.getRot();
-        server.sendToAllTCP(moveMsg);
+        server.sendToAllUDP(moveMsg);
         tanksSent = true;
       }
     }
@@ -168,69 +160,40 @@ void draw()
     moveTimer = millis();
     tanksSent = false;
   }
-  if(millis() - rotateTimer > 35)
+  boolean rotationSent = false;
+  for(int i = 0; i < 4; i++)
   {
-    for(int i = 0; i < 4; i++)
+    if(tanks[i] != null && tanks[i].turretMoved && (millis() - rotateTimer > 25 || !tanks[i].moving))
     {
-      if(tanks[i] != null && tanks[i].turretMoved)
-      {
-        tanks[i].turretMoved = false;
-        Network.RotateClientMsg rotateMsg = new Network.RotateClientMsg();
-        rotateMsg.player = i + 1;
-        rotateMsg.turretRot = tanks[i].tankTurret.getRot();
-        server.sendToAllTCP(rotateMsg);
-      }
+      rotationSent = true;
+      tanks[i].turretMoved = false;
+      Network.RotateClientMsg rotateMsg = new Network.RotateClientMsg();
+      rotateMsg.player = i + 1;
+      rotateMsg.turretRot = tanks[i].tankTurret.getRot();
+      server.sendToAllUDP(rotateMsg);
     }
+  }
+  if(rotationSent)
+  {
     rotateTimer = millis(); 
   }
-  for(Wall currWall: walls.values())
-  {
-    currWall.draw();
-  } 
+  //for debugging. Draws all the walls to the screen.
+//  for(Wall currWall: walls.values())
+//  {
+//    currWall.draw();
+//  } 
   //update and draw bullets
   for(Sprite currBullet: bullets.values())
   {
     currBullet.update(deltaTime);
-    currBullet.draw();
+    //for debugging. Draws the current bullet to the screen
+//    currBullet.draw();
   }
   if(numPlayers - playersDestroyed == 1 && playersDestroyed > 0)
   {
     //endgame
   }
 }
-
-/**
- * Process a message from a client
- */
-//void processMessage(String currString, Client currClient)
-//{
-//  String[] currMessage = currString.split(",");
-//  int currPlayer = players.get(currClient);
-//  if(currMessage[0].equals("shoot"))
-//  {
-//    createBullet(currPlayer);
-//  }
-//  else if(currMessage[0].equals("move"))
-//  {
-//    tanks[currPlayer - 1].moving = true;
-//    tanks[currPlayer - 1].tankBase.setRot(radians(float(currMessage[2]) + 90.0));
-//    tanks[currPlayer - 1].tankBase.setSpeed(tankMaxSpeed * float(currMessage[1]), radians(float(currMessage[2])));
-//    tanks[currPlayer - 1].colliding = false;
-//  }
-//  else if(currMessage[0].equals("rotate"))
-//  {
-//    tanks[currPlayer - 1].tankTurret.setRot(radians(float(currMessage[1]) + 90.0));
-//    tanks[currPlayer - 1].turretMoved = true;
-//  }
-//  else if(currMessage[0].equals("stop"))
-//  {
-//    tanks[currPlayer - 1].moving = false;
-//  }
-//  else if(currMessage[0].equals("disconnect"))
-//  {
-//    disconnectEvent(currClient);
-//  }
-//}
 
 /**
  * Create a bullet and send the bullets info to clients
@@ -452,9 +415,8 @@ void bulletCollisions()
 /**
  * Called every time a new client joins the server
  */
-void setupClient(Object object)
+void setupClient(Connection connection)
 {
-  Client newClient = ((Network.ConnectMsg) object).client;
   if(numPlayers < 5)
   {
     numPlayers++;
@@ -468,9 +430,8 @@ void setupClient(Object object)
         break;
       }
     }
-    println("Client number " + playerNum + " connected with ID: " + newClient.getID());
-    clients.put(playerNum, newClient);
-    players.put(newClient, playerNum);
+    println("Client number " + playerNum + " connected with ID: " + connection.getID());
+    players.add(playerNum);
     tanks[playerNum - 1] = new ServerTank(this);
     tanks[playerNum - 1].spawn(playerNum);
     for(int i = 0; i < 4; i++)
@@ -492,12 +453,10 @@ void setupClient(Object object)
 /**
  * Method that gets called when a client disconnects
  */
-void disconnectEvent(Client deadClient)
+void disconnectEvent(Integer deadPlayer)
 {
-  int deadPlayer = players.get(deadClient);
   println("Client " + deadPlayer + " disconnected");
-  clients.remove(deadPlayer);
-  players.remove(deadClient);
+  players.remove(deadPlayer);
   connectedPlayers[deadPlayer - 1] = false;
   Network.DisconnectMsg disconMsg = new Network.DisconnectMsg();
   disconMsg.player = deadPlayer;
