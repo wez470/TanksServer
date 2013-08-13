@@ -78,6 +78,13 @@ void setup()
       {
         tanks[currPlayer - 1].moving = false;
       }
+      else if(object instanceof Network.ChatMsg)
+      {
+        Network.ChatMsg chatMsg = (Network.ChatMsg) object;
+        Network.ChatMsg newChatMsg = new Network.ChatMsg();
+        newChatMsg.message = "Player " + currPlayer + ": " + chatMsg.message;
+        server.sendToAllTCP(newChatMsg);
+      }
       else if(object instanceof Network.DisconnectMsg)
       {
         disconnectEvent(currPlayer);
@@ -149,19 +156,19 @@ void draw()
 {
   deltaTime = (float) timer.getElapsedTime();
   //for debugging. Draws a background to the screen
-  background(255);  
+//  background(255);  
   processCollisions(); 
-  for(Sprite currPowerUp: powerUps.values())
-  {
-    currPowerUp.draw();
-  }
+//  for(Sprite currPowerUp: powerUps.values())
+//  {
+//    currPowerUp.draw();
+//  }
   for(int i = 0; i < 4; i++)
   {
     //for debugging.  Draws tanks to screen
-    if(tanks[i] != null)
-    {
-      tanks[i].draw();
-    }
+//    if(tanks[i] != null)
+//    {
+//      tanks[i].draw();
+//    }
     if(tanks[i] != null && tanks[i].moving)
     {
       //if the player is moving, move them
@@ -203,10 +210,10 @@ void draw()
     rotateTimer = millis(); 
   }
   //for debugging. Draws all the walls to the screen.
-  for(Wall currWall: walls.values())
-  {
-    currWall.draw();
-  } 
+//  for(Wall currWall: walls.values())
+//  {
+//    currWall.draw();
+//  } 
   //update and draw bullets
   for(Sprite currBullet: bullets.values())
   {
