@@ -10,12 +10,14 @@ HashMap<Sprite, Integer> bulletIDs;
 int bulletID;
 HashMap<Wall, Integer> wallIDs;
 HashMap<Integer, Wall> walls;
+ConcurrentHashMap<Integer, Sprite> powerUps;
+HashMap<Sprite, Integer> powerUpIDs;
 boolean[] connectedPlayers;
 int numPlayers;
 int playersDestroyed = 0;
 ServerTank[] tanks;
 float tankMaxSpeed = 125.0;
-float bulletSpeed = 300.0;
+float bulletSpeed = 50.0;
 float scaleSize; 
 float deltaTime = 0.0;
 int moveTimer = -20;
@@ -23,6 +25,8 @@ int rotateTimer = -20;
 int time = 0;
 boolean tanksSent = false;
 StopWatch timer;
+boolean powerUpTaken = false;
+int powerUpTimer = 0;
 
 void setup()
 {
@@ -35,6 +39,7 @@ void setup()
   bulletIDs = new HashMap<Sprite, Integer>();
   scaleSize = height / 2400.0;
   setupWalls();
+  setupPowerUps();
   timer = new StopWatch();
   connectedPlayers = new boolean[4];
   tanks = new ServerTank[4];
@@ -53,9 +58,7 @@ void setup()
       //check which message was sent and process it
       if(object instanceof Network.ShootServerMsg)
       {
-        //print("Right before Create Bullet");
         createBullet(currPlayer);
-        //print("Right after Created Bullet");
       }
       else if(object instanceof Network.MoveServerMsg)
       {
@@ -79,9 +82,7 @@ void setup()
       {
         disconnectEvent(currPlayer);
       }
-    }
-    
-    
+    }  
   });
   try
   {
@@ -104,15 +105,15 @@ void setupWalls()
   //walls created top to bottom left to right
   float wallsX[] = {0.77 * width, 0.15 * width, 0.23 * width, 0.31 * width, 0.39 * width, 0.61 * width, 0.69 * width,
                     0.77 * width, 0.85 * width, 0.055 * width, 0.15 * width, 0.23 * width, 0.77 * width, 0.85 * width,
-                    0.5 * width, 0.15 * width, 0.23 * width, 0.77 * width, 0.85 * width, 0.945 * width, 0.15 * width,
+                    0.15 * width, 0.23 * width, 0.77 * width, 0.85 * width, 0.945 * width, 0.15 * width,
                     0.23 * width, 0.31 * width, 0.39 * width, 0.61 * width, 0.69 * width, 0.77 * width, 0.85 * width,
                     0.23 * width};
   float wallsY[] = {0.0867 * height, 0.2267 * height, 0.2267 * height, 0.2267 * height, 0.2267 * height, 0.2267 * height,
                     0.2267 * height, 0.2267 * height, 0.2267 * height, 0.3334 * height, 0.3334 * height, 0.3334 * height,
-                    0.3334 * height, 0.3334 * height, 0.5 * height, 0.6667 * height, 0.6667 * height, 0.6667 * height,
+                    0.3334 * height, 0.3334 * height, 0.6667 * height, 0.6667 * height, 0.6667 * height,
                     0.6667 * height, 0.6667 * height, 0.773 * height, 0.773 * height, 0.773 * height, 0.773 * height, 
                     0.773 * height, 0.773 * height, 0.773 * height, 0.773 * height, 0.913 * height};
-  int numWalls = 29;
+  int numWalls = wallsX.length;
   for(int i = 0; i < numWalls; i++)
   {
     Wall wall = new Wall(this, "Images/BlockTiles5Cracked.png", 5, 1, 100);
@@ -124,19 +125,43 @@ void setupWalls()
   }
 }
 
+/**
+ * Set up the power ups for the game
+ */
+void setupPowerUps()
+{
+  powerUps = new ConcurrentHashMap<Integer, Sprite>();
+  powerUpIDs = new HashMap<Sprite, Integer>();
+  float powerUpsX[] = {0.5};
+  float powerUpsY[] = {0.5};
+  int numPowerUps = powerUpsX.length;
+  for(int i = 0; i < numPowerUps; i++)
+  {
+    Sprite powerUp = new Sprite(this, "Images/PowerUp.png", 1, 1, 100);
+    powerUp.setXY(powerUpsX[i] * width, powerUpsY[i] * height);
+    powerUp.setScale(3.75 * scaleSize);
+    powerUps.put(i + 1, powerUp);
+    powerUpIDs.put(powerUp, i + 1);
+  }
+}
+
 void draw()
 {
   deltaTime = (float) timer.getElapsedTime();
   //for debugging. Draws a background to the screen
-//  background(255);  
+  background(255);  
   processCollisions(); 
+  for(Sprite currPowerUp: powerUps.values())
+  {
+    currPowerUp.draw();
+  }
   for(int i = 0; i < 4; i++)
   {
     //for debugging.  Draws tanks to screen
-//    if(tanks[i] != null)
-//    {
-//      tanks[i].draw();
-//    }
+    if(tanks[i] != null)
+    {
+      tanks[i].draw();
+    }
     if(tanks[i] != null && tanks[i].moving)
     {
       //if the player is moving, move them
@@ -178,10 +203,10 @@ void draw()
     rotateTimer = millis(); 
   }
   //for debugging. Draws all the walls to the screen.
-//  for(Wall currWall: walls.values())
-//  {
-//    currWall.draw();
-//  } 
+  for(Wall currWall: walls.values())
+  {
+    currWall.draw();
+  } 
   //update and draw bullets
   for(Sprite currBullet: bullets.values())
   {
@@ -192,6 +217,12 @@ void draw()
   if(numPlayers - playersDestroyed == 1 && playersDestroyed > 0)
   {
     //endgame
+  }
+  if(millis() - powerUpTimer > 10000 && powerUpTaken)
+  {
+    server.sendToAllTCP(new Network.PowerUpResetMsg());
+    setupPowerUps();
+    powerUpTaken = false;
   }
 }
 
@@ -267,6 +298,25 @@ void tankCollisions(int tankIndex)
   //Wall collisions
   tankWallCollisions(tankIndex);
 
+  //PowerUp collisions
+  for(Sprite currPowerUp: powerUps.values())
+  {
+    if(collision(tanks[tankIndex].tankBase, currPowerUp))
+    {
+      int powerUpID = powerUpIDs.get(currPowerUp);
+      //send power up taken message
+      Network.HitPowerUpMsg hitPowerUpMsg = new Network.HitPowerUpMsg();
+      hitPowerUpMsg.powerUpID = powerUpID;
+      server.sendToAllTCP(hitPowerUpMsg);
+      server.sendToTCP(tankIndex + 1, new Network.PowerUpReceivedMsg());
+      powerUpIDs.remove(currPowerUp);
+      powerUps.remove(powerUpID);
+      powerUpTimer = millis();
+      powerUpTaken = true;
+      powerUpTimer = millis();
+    }
+  }
+  
   //Bullet collision
   //handled in bulletCollisions()
 }
@@ -395,8 +445,12 @@ void bulletCollisions()
         {
           Network.HitTankMsg hitMsg = new Network.HitTankMsg();
           hitMsg.player = i + 1;
-          hitMsg.bulletID = bulletIDs.get(currBullet);
+          int bulletID = bulletIDs.get(currBullet);
+          hitMsg.bulletID = bulletID;
           server.sendToAllTCP(hitMsg);
+          bulletIDs.remove(currBullet);
+          bullets.remove(bulletID);
+          
           tanks[i].spawn(i + 1);
           Network.MoveClientMsg moveMsg = new Network.MoveClientMsg();
           moveMsg.player = i + 1;
