@@ -25,6 +25,9 @@ static public class Network
     kryo.register(PowerUpResetMsg.class);
     kryo.register(PowerUpReceivedMsg.class);
     kryo.register(ChatMsg.class);
+    kryo.register(UpdateClientMsg.class);
+    kryo.register(java.util.ArrayList.class);
+    kryo.register(java.util.HashMap.class);
   } 
  
   static public class ShootClientMsg
@@ -108,6 +111,16 @@ static public class Network
   static public class ChatMsg
   {
     String message;
+  }
+  
+  static public class UpdateClientMsg
+  {
+    HashMap<Integer, Integer> wallHits;
+    ArrayList<Integer> removedWalls;
+    ArrayList<ShootClientMsg> bullets;
+    ArrayList<MoveClientMsg> playerPositions;
+    HashMap<Integer, Integer> health;
+    boolean powerUpTaken;
   }
 }
 

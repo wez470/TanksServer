@@ -14,6 +14,7 @@ public class ServerTank
   public boolean colliding;
   public Sprite tankBase;
   public Sprite tankTurret;
+  public int health;
   
   /**
    * Constructor for ServerTank
@@ -27,6 +28,7 @@ public class ServerTank
     moving = false;
     turretMoved = true;
     colliding = false;
+    health = 100;
   }
   
   public void update(float deltaTime)

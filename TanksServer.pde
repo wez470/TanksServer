@@ -8,8 +8,9 @@ ArrayList<Integer> players;
 ConcurrentHashMap<Integer, Sprite> bullets;
 HashMap<Sprite, Integer> bulletIDs;
 int bulletID;
-HashMap<Wall, Integer> wallIDs;
-HashMap<Integer, Wall> walls;
+ConcurrentHashMap<Wall, Integer> wallIDs;
+ConcurrentHashMap<Integer, Wall> walls;
+ArrayList<Integer> removedWalls;
 ConcurrentHashMap<Integer, Sprite> powerUps;
 HashMap<Sprite, Integer> powerUpIDs;
 boolean[] connectedPlayers;
@@ -107,8 +108,9 @@ void setup()
  */
 void setupWalls()
 {
-  walls = new HashMap<Integer, Wall>();
-  wallIDs = new HashMap<Wall, Integer>();
+  removedWalls = new ArrayList<Integer>();
+  walls = new ConcurrentHashMap<Integer, Wall>();
+  wallIDs = new ConcurrentHashMap<Wall, Integer>();
   //walls created top to bottom left to right
   float wallsX[] = {0.77 * width, 0.15 * width, 0.23 * width, 0.31 * width, 0.39 * width, 0.61 * width, 0.69 * width,
                     0.77 * width, 0.85 * width, 0.055 * width, 0.15 * width, 0.23 * width, 0.77 * width, 0.85 * width,
@@ -156,19 +158,19 @@ void draw()
 {
   deltaTime = (float) timer.getElapsedTime();
   //for debugging. Draws a background to the screen
-//  background(255);  
+  background(255);  
   processCollisions(); 
-//  for(Sprite currPowerUp: powerUps.values())
-//  {
-//    currPowerUp.draw();
-//  }
+  for(Sprite currPowerUp: powerUps.values())
+  {
+    currPowerUp.draw();
+  }
   for(int i = 0; i < 4; i++)
   {
     //for debugging.  Draws tanks to screen
-//    if(tanks[i] != null)
-//    {
-//      tanks[i].draw();
-//    }
+    if(tanks[i] != null)
+    {
+      tanks[i].draw();
+    }
     if(tanks[i] != null && tanks[i].moving)
     {
       //if the player is moving, move them
@@ -210,22 +212,22 @@ void draw()
     rotateTimer = millis(); 
   }
   //for debugging. Draws all the walls to the screen.
-//  for(Wall currWall: walls.values())
-//  {
-//    currWall.draw();
-//  } 
+  for(Wall currWall: walls.values())
+  {
+    currWall.draw();
+  } 
   //update and draw bullets
   for(Sprite currBullet: bullets.values())
   {
     currBullet.update(deltaTime);
     //for debugging. Draws the current bullet to the screen
-//    currBullet.draw();
+    currBullet.draw();
   }
   if(numPlayers - playersDestroyed == 1 && playersDestroyed > 0)
   {
     //endgame
   }
-  if(millis() - powerUpTimer > 10000 && powerUpTaken)
+  if(millis() - powerUpTimer > 15000 && powerUpTaken)
   {
     server.sendToAllTCP(new Network.PowerUpResetMsg());
     setupPowerUps();
@@ -304,6 +306,9 @@ void tankCollisions(int tankIndex)
   
   //Wall collisions
   tankWallCollisions(tankIndex);
+  
+  //Tank collisions
+  tankTankCollisions(tankIndex);
 
   //PowerUp collisions
   for(Sprite currPowerUp: powerUps.values())
@@ -387,6 +392,36 @@ void tankWallCollisions(int tankIndex)
 }
 
 /**
+ * Checks for collisions between tanks
+ */
+void tankTankCollisions(int tankIndex)
+{
+  boolean speedCutX = false;
+  boolean speedCutY = false;
+  Sprite tankBase = tanks[tankIndex].tankBase;
+  float tankDegree = degrees((float)tankBase.getRot());
+  for(int i = 0; i < 4; i++)
+  {
+    if(tanks[i] != null && i != tankIndex)
+    {
+      if(collision(tankBase, tanks[i].tankBase))
+      {
+        char side = collisionSide(tankBase, tanks[i].tankBase);
+        if((side == 'T' && tankDegree > 90) || (side == 'B' && tankDegree < 90))
+        {
+          tankBase.setVelXY(0.0, 0.0);
+        }
+        if((side == 'L' && tankDegree > 0 && tankDegree < 180) || (side == 'R' && (tankDegree < 0 || tankDegree > 180)))
+        {
+          tankBase.setVelXY(0.0, 0.0);
+        }
+      }
+    }
+  }
+}
+
+
+/**
  * Check for collisions with bullets
  */
 void bulletCollisions()
@@ -427,6 +462,7 @@ void bulletCollisions()
         hitMsg.bulletID = bulletIDs.get(currBullet);
         server.sendToAllTCP(hitMsg);
         currWall.hitCount++;
+        //println(currWall.getFrame()); ranges from 0 to 4
         if(currWall.hitCount % 2 == 0 && currWall.hitCount < 10)
         {
           currWall.setFrame(currWall.getFrame() + 1);
@@ -434,6 +470,7 @@ void bulletCollisions()
         if(currWall.hitCount >= 10)
         {
           int wallID = wallIDs.get(currWall);
+          removedWalls.add(wallID);
           wallIDs.remove(currWall);
           walls.remove(wallID);
         }  
@@ -457,16 +494,21 @@ void bulletCollisions()
           server.sendToAllTCP(hitMsg);
           bulletIDs.remove(currBullet);
           bullets.remove(bulletID);
+          tanks[i].health -= 20;
           
-          tanks[i].spawn(i + 1);
-          Network.MoveClientMsg moveMsg = new Network.MoveClientMsg();
-          moveMsg.player = i + 1;
-          moveMsg.x = tanks[i].tankBase.getX();
-          moveMsg.y = tanks[i].tankBase.getY();
-          moveMsg.baseRot = tanks[i].tankBase.getRot();
-          moveMsg.turretRot = tanks[i].tankTurret.getRot();
-          server.sendToAllTCP(moveMsg);
-          playersDestroyed++;
+          if(tanks[i].health <= 0)
+          {
+            tanks[i].spawn(i + 1);
+            Network.MoveClientMsg moveMsg = new Network.MoveClientMsg();
+            moveMsg.player = i + 1;
+            moveMsg.x = tanks[i].tankBase.getX();
+            moveMsg.y = tanks[i].tankBase.getY();
+            moveMsg.baseRot = tanks[i].tankBase.getRot();
+            moveMsg.turretRot = tanks[i].tankTurret.getRot();
+            server.sendToAllTCP(moveMsg);
+            playersDestroyed++;
+            tanks[i].health = 100;
+          }
         }
       } 
     }
@@ -495,20 +537,58 @@ void setupClient(Connection connection)
     players.add(playerNum);
     tanks[playerNum - 1] = new ServerTank(this);
     tanks[playerNum - 1].spawn(playerNum);
-    for(int i = 0; i < 4; i++)
+    createAndSendUpdateClientMsg(playerNum);
+  }
+}
+
+/**
+ * Method that creates and sends a UpdateClientMsg to a player. UpdateClientMsgs update the whole gamestate
+ * @param player: the player to send the message to
+ */
+void createAndSendUpdateClientMsg(int player)
+{
+  Network.UpdateClientMsg updateMsg = new Network.UpdateClientMsg();
+  updateMsg.playerPositions = new ArrayList<Network.MoveClientMsg>(); 
+  for(int i = 0; i < 4; i++)
+  {
+    if(connectedPlayers[i] == true)
     {
-      if(connectedPlayers[i] == true)
-      {
-          Network.MoveClientMsg moveMsg = new Network.MoveClientMsg();
-          moveMsg.player = i + 1;
-          moveMsg.x = tanks[i].tankBase.getX();
-          moveMsg.y = tanks[i].tankBase.getY();
-          moveMsg.baseRot = tanks[i].tankBase.getRot();
-          moveMsg.turretRot = tanks[i].tankTurret.getRot();
-          server.sendToAllTCP(moveMsg);
-      }
+        Network.MoveClientMsg moveMsg = new Network.MoveClientMsg();
+        moveMsg.player = i + 1;
+        moveMsg.x = tanks[i].tankBase.getX();
+        moveMsg.y = tanks[i].tankBase.getY();
+        moveMsg.baseRot = tanks[i].tankBase.getRot();
+        moveMsg.turretRot = tanks[i].tankTurret.getRot();
+        updateMsg.playerPositions.add(moveMsg);
     }
   }
+  updateMsg.removedWalls = removedWalls;
+  updateMsg.wallHits = new HashMap<Integer, Integer>();
+  for(int currWallID: wallIDs.values())
+  {
+    updateMsg.wallHits.put(currWallID, walls.get(currWallID).hitCount);
+  }
+  updateMsg.powerUpTaken = powerUpTaken;
+  updateMsg.bullets = new ArrayList<Network.ShootClientMsg>();
+  for(Sprite currBullet: bullets.values())
+  {
+    Network.ShootClientMsg shootMsg = new Network.ShootClientMsg();
+    shootMsg.x = currBullet.getX();
+    shootMsg.y = currBullet.getY();
+    shootMsg.bulletRot = currBullet.getRot();
+    shootMsg.bulletID = bulletIDs.get(currBullet);
+    shootMsg.heading = currBullet.getRot() - PI / 2;
+    updateMsg.bullets.add(shootMsg);
+  }
+  updateMsg.health = new HashMap<Integer, Integer>();
+  for(int i = 0; i < 4; i++)
+  {
+    if(tanks[i] != null)
+    {
+      updateMsg.health.put(i, tanks[i].health);
+    }
+  }
+  server.sendToTCP(player, updateMsg);   
 }
 
 /**
