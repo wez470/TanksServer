@@ -12,6 +12,7 @@ public class ServerTank
   public boolean moving;
   public boolean turretMoved;
   public boolean colliding;
+  public boolean invincible;
   public Sprite tankBase;
   public Sprite tankTurret;
   public int health;
@@ -28,6 +29,7 @@ public class ServerTank
     moving = false;
     turretMoved = true;
     colliding = false;
+    invincible = false;
     health = 100;
   }
   

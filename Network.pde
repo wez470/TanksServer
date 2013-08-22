@@ -24,6 +24,10 @@ static public class Network
     kryo.register(HitPowerUpMsg.class);
     kryo.register(PowerUpResetMsg.class);
     kryo.register(PowerUpReceivedMsg.class);
+    kryo.register(InvincibleServerMsg.class);
+    kryo.register(InvincibleClientMsg.class);
+    kryo.register(InvincibleStopServerMsg.class);
+    kryo.register(InvincibleStopClientMsg.class);
     kryo.register(ChatMsg.class);
     kryo.register(UpdateClientMsg.class);
     kryo.register(java.util.ArrayList.class);
@@ -106,6 +110,24 @@ static public class Network
   
   static public class PowerUpResetMsg
   {
+  }
+  
+  static public class InvincibleServerMsg
+  {
+  }
+  
+  static public class InvincibleClientMsg
+  {
+    int player;
+  }
+  
+  static public class InvincibleStopServerMsg
+  {  
+  }
+
+  static public class InvincibleStopClientMsg
+  {
+    int player;
   }
   
   static public class ChatMsg

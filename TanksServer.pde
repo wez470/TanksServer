@@ -18,7 +18,7 @@ int numPlayers;
 int playersDestroyed = 0;
 ServerTank[] tanks;
 float tankMaxSpeed = 125.0;
-float bulletSpeed = 50.0;
+float bulletSpeed = 200.0;
 float scaleSize; 
 float deltaTime = 0.0;
 int moveTimer = -20;
@@ -79,11 +79,26 @@ void setup()
       {
         tanks[currPlayer - 1].moving = false;
       }
+      else if(object instanceof Network.InvincibleServerMsg)
+      {
+        tanks[currPlayer - 1].invincible = true;
+        Network.InvincibleClientMsg invincibleMsg = new Network.InvincibleClientMsg();
+        invincibleMsg.player = currPlayer;
+        server.sendToAllTCP(invincibleMsg);
+      }
+      else if(object instanceof Network.InvincibleStopServerMsg)
+      {
+        tanks[currPlayer - 1].invincible = false;
+        Network.InvincibleStopClientMsg invincibleMsg = new Network.InvincibleStopClientMsg();
+        invincibleMsg.player = currPlayer;
+        server.sendToAllTCP(invincibleMsg);
+      }
       else if(object instanceof Network.ChatMsg)
       {
         Network.ChatMsg chatMsg = (Network.ChatMsg) object;
         Network.ChatMsg newChatMsg = new Network.ChatMsg();
-        newChatMsg.message = "Player " + currPlayer + ": " + chatMsg.message;
+        //newChatMsg.message = "" + hour() + ":" + minute() + ":" + second();
+        newChatMsg.message = "Player " + currPlayer + ": " + chatMsg.message.trim() + " " + hour() + ":" + minute() + ":" + second();
         server.sendToAllTCP(newChatMsg);
       }
       else if(object instanceof Network.DisconnectMsg)
@@ -461,7 +476,7 @@ void bulletCollisions()
         hitMsg.wallID = wallIDs.get(currWall);
         hitMsg.bulletID = bulletIDs.get(currBullet);
         server.sendToAllTCP(hitMsg);
-        currWall.hitCount++;
+        currWall.hitCount += 2;
         //println(currWall.getFrame()); ranges from 0 to 4
         if(currWall.hitCount % 2 == 0 && currWall.hitCount < 10)
         {
@@ -485,7 +500,7 @@ void bulletCollisions()
     {
       if(tanks[i] != null)
       {
-        if(collision(currBullet, tanks[i].tankBase))
+        if(!tanks[i].invincible && collision(currBullet, tanks[i].tankBase))
         {
           Network.HitTankMsg hitMsg = new Network.HitTankMsg();
           hitMsg.player = i + 1;
