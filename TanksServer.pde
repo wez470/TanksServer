@@ -5,9 +5,10 @@ import java.util.concurrent.*;
 
 Server server;
 ArrayList<Integer> players;
-ConcurrentHashMap<Integer, Sprite> bullets;
-HashMap<Sprite, Integer> bulletIDs;
+ConcurrentHashMap<Integer, Bullet> bullets;
+HashMap<Bullet, Integer> bulletIDs;
 int bulletID;
+String[] killMessages = new String[]{"destroyed", "demolished", "annihilated", "exterminated", "obliterated", "slaughtered", "exterminated"};
 ConcurrentHashMap<Wall, Integer> wallIDs;
 ConcurrentHashMap<Integer, Wall> walls;
 ArrayList<Integer> removedWalls;
@@ -15,8 +16,8 @@ ConcurrentHashMap<Integer, Sprite> powerUps;
 HashMap<Sprite, Integer> powerUpIDs;
 boolean[] connectedPlayers;
 int numPlayers;
-int playersDestroyed = 0;
 ServerTank[] tanks;
+Score[] scores;
 float tankMaxSpeed = 125.0;
 float bulletSpeed = 200.0;
 float scaleSize; 
@@ -36,14 +37,15 @@ void setup()
   numPlayers = 0;
   bulletID = 0;
   players = new ArrayList<Integer>();
-  bullets = new ConcurrentHashMap<Integer, Sprite>();
-  bulletIDs = new HashMap<Sprite, Integer>();
+  bullets = new ConcurrentHashMap<Integer, Bullet>();
+  bulletIDs = new HashMap<Bullet, Integer>();
   scaleSize = height / 2400.0;
   setupWalls();
   setupPowerUps();
   timer = new StopWatch();
   connectedPlayers = new boolean[4];
   tanks = new ServerTank[4];
+  scores = new Score[4];
   server = new Server();
   Network.register(server);
   server.addListener(new Listener() 
@@ -98,7 +100,7 @@ void setup()
         Network.ChatMsg chatMsg = (Network.ChatMsg) object;
         Network.ChatMsg newChatMsg = new Network.ChatMsg();
         //newChatMsg.message = "" + hour() + ":" + minute() + ":" + second();
-        newChatMsg.message = "Player " + currPlayer + ": " + chatMsg.message.trim() + " " + hour() + ":" + minute() + ":" + second();
+        newChatMsg.message = "Player " + currPlayer + ": " + chatMsg.message.trim() + "   " + time();
         server.sendToAllTCP(newChatMsg);
       }
       else if(object instanceof Network.DisconnectMsg)
@@ -167,6 +169,14 @@ void setupPowerUps()
     powerUps.put(i + 1, powerUp);
     powerUpIDs.put(powerUp, i + 1);
   }
+}
+
+/** 
+ * A method to get the current time as a string
+ */
+String time()
+{
+  return hour() + ":" + minute() + ":" + second();
 }
 
 void draw()
@@ -238,16 +248,28 @@ void draw()
     //for debugging. Draws the current bullet to the screen
     currBullet.draw();
   }
-  if(numPlayers - playersDestroyed == 1 && playersDestroyed > 0)
-  {
-    //endgame
-  }
   if(millis() - powerUpTimer > 15000 && powerUpTaken)
   {
     server.sendToAllTCP(new Network.PowerUpResetMsg());
     setupPowerUps();
     powerUpTaken = false;
   }
+//  PriorityQueue<Score> orderedScores = new PriorityQueue<Score>(4);
+//  for(int i = 0; i < 4; i++)
+//  {
+//    if(scores[i] != null)
+//    {
+//      orderedScores.add(scores[i]);
+//    }
+//  }
+//  for(int i = 0; i < 4; i++)
+//  {
+//    if(scores[i] != null)
+//    {
+//      print(orderedScores.poll() + " ");
+//    }
+//  }
+//  println();
 }
 
 /**
@@ -257,7 +279,7 @@ void createBullet(int currPlayer)
 {
   double turretLength = tanks[currPlayer - 1].tankTurret.getHeight();
   float turretRot = degrees((float)tanks[currPlayer - 1].tankTurret.getRot());
-  Sprite bullet = new Sprite(this, "Images/Bullet.png", 101);
+  Bullet bullet = new Bullet(this, "Images/Bullet.png", 101, currPlayer);
   bullet.setRot(radians(turretRot));
   bullet.setSpeed(bulletSpeed, radians(turretRot - 90.0));
   bullet.setX(tanks[currPlayer - 1].tankTurret.getX() + (turretLength / 2 + bullet.getHeight() / 2) * cos(radians(turretRot - 90.0)));
@@ -441,10 +463,10 @@ void tankTankCollisions(int tankIndex)
  */
 void bulletCollisions()
 {
-  Iterator<Sprite> bulletIt = bullets.values().iterator();
+  Iterator<Bullet> bulletIt = bullets.values().iterator();
   while(bulletIt.hasNext())
   {
-    Sprite currBullet = bulletIt.next();
+    Bullet currBullet = bulletIt.next();
     //check if out of bounds
     if(((currBullet.getX() + currBullet.getWidth() / 2) > width) 
     || (currBullet.getX() - currBullet.getWidth() / 2) < 0)
@@ -505,12 +527,13 @@ void bulletCollisions()
           Network.HitTankMsg hitMsg = new Network.HitTankMsg();
           hitMsg.player = i + 1;
           int bulletID = bulletIDs.get(currBullet);
+          int shooter = currBullet.player;
+          hitMsg.shooter = shooter;
           hitMsg.bulletID = bulletID;
           server.sendToAllTCP(hitMsg);
           bulletIDs.remove(currBullet);
           bullets.remove(bulletID);
-          tanks[i].health -= 20;
-          
+          tanks[i].health -= 20;      
           if(tanks[i].health <= 0)
           {
             tanks[i].spawn(i + 1);
@@ -521,7 +544,10 @@ void bulletCollisions()
             moveMsg.baseRot = tanks[i].tankBase.getRot();
             moveMsg.turretRot = tanks[i].tankTurret.getRot();
             server.sendToAllTCP(moveMsg);
-            playersDestroyed++;
+            Network.ChatMsg chatMsg = new Network.ChatMsg();
+            scores[shooter - 1].kills++;
+            chatMsg.message = "Player " + shooter + " " + killMessages[min(6, (int)random(0, 7))] + " Player " + (i + 1) + "!   " + time();
+            server.sendToAllTCP(chatMsg);
             tanks[i].health = 100;
           }
         }
@@ -550,6 +576,7 @@ void setupClient(Connection connection)
     }
     println("Client number " + playerNum + " connected with ID: " + connection.getID());
     players.add(playerNum);
+    scores[playerNum - 1] = new Score(playerNum);
     tanks[playerNum - 1] = new ServerTank(this);
     tanks[playerNum - 1].spawn(playerNum);
     createAndSendUpdateClientMsg(playerNum);
@@ -596,11 +623,13 @@ void createAndSendUpdateClientMsg(int player)
     updateMsg.bullets.add(shootMsg);
   }
   updateMsg.health = new HashMap<Integer, Integer>();
+  updateMsg.scores = new HashMap<Integer, Integer>();
   for(int i = 0; i < 4; i++)
   {
     if(tanks[i] != null)
     {
       updateMsg.health.put(i, tanks[i].health);
+      updateMsg.scores.put(i, scores[i].kills);
     }
   }
   server.sendToTCP(player, updateMsg);   

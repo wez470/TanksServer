@@ -60,6 +60,7 @@ static public class Network
   
   static public class HitTankMsg
   {
+    int shooter;
     int player;
     int bulletID;
   }
@@ -142,6 +143,7 @@ static public class Network
     ArrayList<ShootClientMsg> bullets;
     ArrayList<MoveClientMsg> playerPositions;
     HashMap<Integer, Integer> health;
+    HashMap<Integer, Integer> scores;
     boolean powerUpTaken;
   }
 }

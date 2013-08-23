@@ -16,6 +16,7 @@ public class ServerTank
   public Sprite tankBase;
   public Sprite tankTurret;
   public int health;
+  public int kills;
   
   /**
    * Constructor for ServerTank
@@ -31,6 +32,7 @@ public class ServerTank
     colliding = false;
     invincible = false;
     health = 100;
+    kills = 0;
   }
   
   public void update(float deltaTime)
