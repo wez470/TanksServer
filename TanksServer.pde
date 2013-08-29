@@ -3,6 +3,8 @@ import com.esotericsoftware.kryonet.*;
 import java.util.*;
 import java.util.concurrent.*;
 
+import javax.swing.JOptionPane; //JOptionPane
+
 Server server;
 ArrayList<Integer> players;
 ConcurrentHashMap<Integer, Bullet> bullets;
@@ -29,6 +31,8 @@ boolean tanksSent = false;
 StopWatch timer;
 boolean powerUpTaken = false;
 int powerUpTimer = 0;
+PrintWriter log; 
+boolean[] setup;
 
 void setup()
 {
@@ -46,7 +50,16 @@ void setup()
   connectedPlayers = new boolean[4];
   tanks = new ServerTank[4];
   scores = new Score[4];
+  setup = new boolean[4];
+  for(int i = 0; i < 4; i++)
+  {
+    setup[i] = false;
+  }
   server = new Server();
+  String logID = JOptionPane.showInputDialog(this, "Enter the log file ID number");
+  log = createWriter("logs/log" + logID + ".txt");
+  log.println("EVENT LOG");
+  log.flush();
   Network.register(server);
   server.addListener(new Listener() 
   {
@@ -99,7 +112,8 @@ void setup()
       {
         Network.ChatMsg chatMsg = (Network.ChatMsg) object;
         Network.ChatMsg newChatMsg = new Network.ChatMsg();
-        //newChatMsg.message = "" + hour() + ":" + minute() + ":" + second();
+        log.println("Chat Message: Player " + currPlayer + ": " + chatMsg.message.trim() + "\t" + time());
+        log.flush();
         newChatMsg.message = "Player " + currPlayer + ": " + chatMsg.message.trim() + "   " + time();
         server.sendToAllTCP(newChatMsg);
       }
@@ -183,19 +197,19 @@ void draw()
 {
   deltaTime = (float) timer.getElapsedTime();
   //for debugging. Draws a background to the screen
-  background(255);  
+//  background(255);  
   processCollisions(); 
-  for(Sprite currPowerUp: powerUps.values())
-  {
-    currPowerUp.draw();
-  }
+//  for(Sprite currPowerUp: powerUps.values())
+//  {
+//    currPowerUp.draw();
+//  }
   for(int i = 0; i < 4; i++)
   {
     //for debugging.  Draws tanks to screen
-    if(tanks[i] != null)
-    {
-      tanks[i].draw();
-    }
+//    if(tanks[i] != null)
+//    {
+//      tanks[i].draw();
+//    }
     if(tanks[i] != null && tanks[i].moving)
     {
       //if the player is moving, move them
@@ -208,7 +222,14 @@ void draw()
         moveMsg.y = tanks[i].tankBase.getY();
         moveMsg.baseRot = tanks[i].tankBase.getRot();
         moveMsg.turretRot = tanks[i].tankTurret.getRot();
-        server.sendToAllUDP(moveMsg);
+        for(int k = 0; k < 4; k++)
+        {
+          if(setup[k])
+          {
+            server.sendToUDP(k + 1, moveMsg);
+            tanksSent = true;
+          }
+        }
         tanksSent = true;
       }
     }
@@ -229,7 +250,13 @@ void draw()
       Network.RotateClientMsg rotateMsg = new Network.RotateClientMsg();
       rotateMsg.player = i + 1;
       rotateMsg.turretRot = tanks[i].tankTurret.getRot();
-      server.sendToAllUDP(rotateMsg);
+      for(int k = 0; k < 4; k++)
+      {
+        if(setup[k])
+        {
+          server.sendToUDP(k + 1, rotateMsg);
+        }
+      }
     }
   }
   if(rotationSent)
@@ -237,16 +264,16 @@ void draw()
     rotateTimer = millis(); 
   }
   //for debugging. Draws all the walls to the screen.
-  for(Wall currWall: walls.values())
-  {
-    currWall.draw();
-  } 
+//  for(Wall currWall: walls.values())
+//  {
+//    currWall.draw();
+//  } 
   //update and draw bullets
   for(Sprite currBullet: bullets.values())
   {
     currBullet.update(deltaTime);
     //for debugging. Draws the current bullet to the screen
-    currBullet.draw();
+//    currBullet.draw();
   }
   if(millis() - powerUpTimer > 15000 && powerUpTaken)
   {
@@ -254,22 +281,6 @@ void draw()
     setupPowerUps();
     powerUpTaken = false;
   }
-//  PriorityQueue<Score> orderedScores = new PriorityQueue<Score>(4);
-//  for(int i = 0; i < 4; i++)
-//  {
-//    if(scores[i] != null)
-//    {
-//      orderedScores.add(scores[i]);
-//    }
-//  }
-//  for(int i = 0; i < 4; i++)
-//  {
-//    if(scores[i] != null)
-//    {
-//      print(orderedScores.poll() + " ");
-//    }
-//  }
-//  println();
 }
 
 /**
@@ -362,6 +373,7 @@ void tankCollisions(int tankIndex)
       powerUps.remove(powerUpID);
       powerUpTimer = millis();
       powerUpTaken = true;
+      log.println("Player " + (tankIndex + 1) + " took power up\t" + time());
       powerUpTimer = millis();
     }
   }
@@ -498,7 +510,7 @@ void bulletCollisions()
         hitMsg.wallID = wallIDs.get(currWall);
         hitMsg.bulletID = bulletIDs.get(currBullet);
         server.sendToAllTCP(hitMsg);
-        currWall.hitCount += 2;
+        currWall.hitCount += 1;
         //println(currWall.getFrame()); ranges from 0 to 4
         if(currWall.hitCount % 2 == 0 && currWall.hitCount < 10)
         {
@@ -546,6 +558,18 @@ void bulletCollisions()
             server.sendToAllTCP(moveMsg);
             Network.ChatMsg chatMsg = new Network.ChatMsg();
             scores[shooter - 1].kills++;
+            log.println("Player " + shooter + " killed Player " + (i + 1) + "\t" + time());
+            String score = "Score - ";
+            for(int k = 0; k < 4; k++)
+            {
+              if(scores[k] != null)
+              {
+                score += "Player " + (k + 1) + ": " + scores[k].kills + "  ";
+              }
+            }
+            score += "\t" + time();
+            log.println(score);
+            log.flush();
             chatMsg.message = "Player " + shooter + " " + killMessages[min(6, (int)random(0, 7))] + " Player " + (i + 1) + "!   " + time();
             server.sendToAllTCP(chatMsg);
             tanks[i].health = 100;
@@ -575,6 +599,8 @@ void setupClient(Connection connection)
       }
     }
     println("Client number " + playerNum + " connected with ID: " + connection.getID());
+    log.println("Client number " + playerNum + " connected with ID: " + connection.getID() + "\t" + time());
+    log.flush();
     players.add(playerNum);
     scores[playerNum - 1] = new Score(playerNum);
     tanks[playerNum - 1] = new ServerTank(this);
@@ -632,7 +658,8 @@ void createAndSendUpdateClientMsg(int player)
       updateMsg.scores.put(i, scores[i].kills);
     }
   }
-  server.sendToTCP(player, updateMsg);   
+  server.sendToAllTCP(updateMsg);
+  setup[player - 1] = true;
 }
 
 /**
@@ -641,6 +668,8 @@ void createAndSendUpdateClientMsg(int player)
 void disconnectEvent(Integer deadPlayer)
 {
   println("Client " + deadPlayer + " disconnected");
+  log.println("Client " + deadPlayer + " disconnected\t" + time());
+  log.flush();
   players.remove(deadPlayer);
   connectedPlayers[deadPlayer - 1] = false;
   Network.DisconnectMsg disconMsg = new Network.DisconnectMsg();
@@ -711,4 +740,10 @@ char collisionSide(Sprite objOne, Sprite objTwo)
   {
     return 'B';
   }
+}
+
+void exit()
+{
+  log.close();
+  super.exit();
 }
